@@ -1,0 +1,86 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: jif-lab
+  region: ap-east-1
+  version: "1.34"
+  tags:
+    Owner: jif
+    Env: lab
+    Project: devops-learning
+
+# Enable OIDC provider (required for IRSA)
+iam:
+  withOIDC: true
+
+# VPC: auto-create across 2 AZs
+vpc:
+  cidr: "10.42.0.0/16"
+  nat:
+    gateway: Single        # Single NAT to save cost
+  clusterEndpoints:
+    publicAccess: true
+    privateAccess: true
+
+# Managed add-ons
+addons:
+  - name: vpc-cni
+    version: latest
+  - name: coredns
+    version: latest
+  - name: kube-proxy
+    version: latest
+  - name: aws-ebs-csi-driver
+    version: latest
+    wellKnownPolicies:
+      ebsCSIController: true
+
+# Node group 1: general purpose workers
+managedNodeGroups:
+  - name: workers-general
+    instanceType: t4g.large
+    amiFamily: AmazonLinux2023
+    desiredCapacity: 2
+    minSize: 2
+    maxSize: 4
+    volumeSize: 30
+    spot: true
+    privateNetworking: true
+    labels:
+      role: general
+    tags:
+      NodeGroup: workers-general
+    iam:
+      withAddonPolicies:
+        ebs: true
+        cloudWatch: true
+        autoScaler: true
+
+  # Node group 2: reserved for stateful services
+  - name: workers-stateful
+    instanceType: t4g.large
+    amiFamily: AmazonLinux2023
+    desiredCapacity: 1
+    minSize: 1
+    maxSize: 2
+    volumeSize: 30
+    spot: true
+    privateNetworking: true
+    labels:
+      role: stateful
+    taints:
+      - key: stateful
+        value: "true"
+        effect: NoSchedule
+    tags:
+      NodeGroup: workers-stateful
+    iam:
+      withAddonPolicies:
+        ebs: true
+        cloudWatch: true
+        autoScaler: true
+
+cloudWatch:
+  clusterLogging:
+    enableTypes: ["audit", "authenticator"]
