@@ -1,0 +1,31 @@
+provider:
+  name: aws
+
+env:
+  - name: AWS_DEFAULT_REGION
+    value: ap-east-1
+
+domainFilters:
+  - aws.ololol.lol
+
+policy: upsert-only
+
+sources:
+  - service
+  - ingress
+
+serviceAccount:
+  create: false
+  name: external-dns
+
+txtOwnerId: jif-lab-eks
+txtPrefix: "_externaldns."
+
+logLevel: info
+
+resources:
+  limits:
+    memory: 128Mi
+  requests:
+    cpu: 50m
+    memory: 64Mi
