@@ -1,2 +1,4 @@
 devops/python-agent
 library/kaniko-executor
+myapp/flask-demo-1
+myapp/flask-demo-1/cache

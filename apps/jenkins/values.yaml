@@ -189,6 +189,7 @@ controller:
           clouds:
             - kubernetes:
                 name: "kubernetes"
+                webSocket: true
                 serverUrl: "https://kubernetes.default"
                 namespace: "jenkins"
                 jenkinsUrl: "http://jenkins.jenkins.svc.cluster.local:8080/"
@@ -219,11 +220,22 @@ controller:
                     nodeSelector: "kubernetes.io/os=linux"
                     containers:
                       - name: "jnlp"
-                        image: "jenkins/inbound-agent:3273.v4cfe589b_fd33-2"
+                        image: "jenkins/inbound-agent:latest"
                         alwaysPullImage: false
                         workingDir: "/home/jenkins/agent"
                         ttyEnabled: true
                         resourceRequestCpu: "100m"
+                        resourceRequestMemory: "256Mi"
+                        resourceLimitCpu: "300m"
+                        resourceLimitMemory: "512Mi"
+                      - name: "python"
+                        image: "python:3.12-slim"
+                        alwaysPullImage: false
+                        workingDir: "/home/jenkins/agent"
+                        command: "sleep"
+                        args: "infinity"
+                        ttyEnabled: true
+                        resourceRequestCpu: "200m"
                         resourceRequestMemory: "256Mi"
                         resourceLimitCpu: "500m"
                         resourceLimitMemory: "768Mi"
@@ -245,7 +257,7 @@ controller:
                     nodeSelector: "kubernetes.io/os=linux"
                     containers:
                       - name: "jnlp"
-                        image: "jenkins/inbound-agent:3273.v4cfe589b_fd33-2"
+                        image: "jenkins/inbound-agent:latest"
                         alwaysPullImage: false
                         workingDir: "/home/jenkins/agent"
                         ttyEnabled: true
