@@ -1,7 +1,7 @@
 #!/bin/bash
 # install-jenkins.sh - Install Jenkins on EKS with IRSA + JCasC
 #
-# Design principles (lessons from real-world setup):
+# Design principles:
 #   - ServiceAccounts (jenkins, jenkins-agent) are owned by eksctl, NOT Helm.
 #     This avoids Server-Side Apply field-ownership conflicts on subsequent
 #     helm upgrades (eksctl writes IRSA annotations, Helm wants to manage SA labels).
@@ -10,9 +10,6 @@
 #       serviceAccountAgent.create: false
 #   - JCasC credentials secret (GitHub PAT) is created BEFORE helm install so
 #     JCasC can resolve ${jenkins-credentials-XXX} references at startup.
-#   - WebSocket protocol enabled for agent <-> controller (no TCP 50000 needed).
-#   - CFN stack drift recovery: if eksctl reports SA exists but K8s shows it
-#     missing, fall back to manual SA creation reusing the existing IAM Role.
 #
 # Usage:
 #   export GITHUB_PAT='ghp_xxx'         # required
@@ -75,14 +72,6 @@ do
 done
 echo "  All required files present"
 
-# values.yaml sanity: webSocket must be enabled (we disabled agentListener)
-if ! grep -q "webSocket: true" "$ROOT/apps/jenkins/values.yaml"; then
-  echo "ERROR: values.yaml missing 'webSocket: true' in kubernetes cloud config"
-  echo "  Without it agents cannot connect (no TCP 50000 listener either)"
-  exit 1
-fi
-echo "  values.yaml: webSocket protocol confirmed"
-
 # ------------------------- Step 1: Namespace ----------------------------------
 echo ""
 echo "===> [1/6] Creating namespace $NAMESPACE"
@@ -91,6 +80,7 @@ kubectl apply -f "$ROOT/apps/jenkins/00-namespace.yaml"
 # ------------------------- Step 2: JCasC credentials secret -------------------
 echo ""
 echo "===> [2/6] Creating jenkins-credentials secret (read by JCasC at startup)"
+# Idempotent: use server-side apply via kubectl create --dry-run | kubectl apply
 kubectl create secret generic jenkins-credentials \
   --namespace "$NAMESPACE" \
   --from-literal=GITHUB_USERNAME="$GITHUB_USERNAME" \
@@ -114,69 +104,34 @@ fi
 POLICY_ARN="arn:aws:iam::${ACCOUNT_ID}:policy/${POLICY_NAME}"
 
 # ------------------------- Step 4: IRSA for SAs (BEFORE helm install) ---------
-# Helper: create IRSA, then ensure the K8s SA actually exists.
-# If CFN stack exists but SA was deleted from K8s (drift), recreate SA manually
-# reusing the existing IAM Role ARN.
-
-ensure_irsa_sa() {
-  local sa_name=$1
-
-  echo ""
-  echo "  --> ensure IRSA for SA: $sa_name"
-
-  # First try the normal eksctl flow
-  eksctl create iamserviceaccount \
-    --cluster="$CLUSTER" \
-    --region="$REGION" \
-    --namespace="$NAMESPACE" \
-    --name="$sa_name" \
-    --attach-policy-arn="$POLICY_ARN" \
-    --override-existing-serviceaccounts \
-    --approve
-
-  # Verify SA actually exists in K8s now
-  if kubectl -n "$NAMESPACE" get sa "$sa_name" >/dev/null 2>&1; then
-    return 0
-  fi
-
-  # CFN stack drift: stack exists but K8s SA was deleted
-  echo "  WARN: SA $sa_name not in K8s after eksctl (CFN stack drift detected)"
-  echo "  Recovering: manually recreating SA with existing IAM Role"
-
-  local role_arn
-  role_arn=$(eksctl get iamserviceaccount \
-    --cluster "$CLUSTER" --region "$REGION" -o json | \
-    jq -r ".[] | select(.metadata.name==\"$sa_name\") | .status.roleARN")
-
-  if [ -z "$role_arn" ] || [ "$role_arn" = "null" ]; then
-    echo "  ERROR: cannot find IAM Role ARN for $sa_name"
-    exit 1
-  fi
-
-  cat <<YAML | kubectl apply -f -
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: $sa_name
-  namespace: $NAMESPACE
-  annotations:
-    eks.amazonaws.com/role-arn: $role_arn
-  labels:
-    app.kubernetes.io/managed-by: eksctl
-YAML
-}
+# Critical: SAs must exist before helm install, because values.yaml has
+#   serviceAccount.create: false
+#   serviceAccountAgent.create: false
+# This way Helm never tries to own these SA objects, avoiding SSA field conflicts.
 
 echo ""
 echo "===> [4/6] Creating IRSA for jenkins SA (controller)"
-ensure_irsa_sa jenkins
+eksctl create iamserviceaccount \
+  --cluster="$CLUSTER" \
+  --region="$REGION" \
+  --namespace="$NAMESPACE" \
+  --name=jenkins \
+  --attach-policy-arn="$POLICY_ARN" \
+  --override-existing-serviceaccounts \
+  --approve
 
 echo ""
 echo "===> [5/6] Creating IRSA for jenkins-agent SA (build pods)"
-ensure_irsa_sa jenkins-agent
+eksctl create iamserviceaccount \
+  --cluster="$CLUSTER" \
+  --region="$REGION" \
+  --namespace="$NAMESPACE" \
+  --name=jenkins-agent \
+  --attach-policy-arn="$POLICY_ARN" \
+  --override-existing-serviceaccounts \
+  --approve
 
-# Final verification: both SAs must have IRSA annotation
-echo ""
-echo "  Verifying IRSA annotations:"
+# Verify both SAs got their IRSA annotation
 for sa in jenkins jenkins-agent; do
   role_arn=$(kubectl -n "$NAMESPACE" get sa "$sa" \
     -o jsonpath='{.metadata.annotations.eks\.amazonaws\.com/role-arn}' 2>/dev/null || true)
@@ -184,7 +139,7 @@ for sa in jenkins jenkins-agent; do
     echo "ERROR: SA $sa missing eks.amazonaws.com/role-arn annotation"
     exit 1
   fi
-  echo "    $sa -> $role_arn"
+  echo "  $sa -> $role_arn"
 done
 
 # ------------------------- Step 6: Helm install -------------------------------
@@ -205,7 +160,7 @@ echo "============================================================"
 echo "  Jenkins installed successfully"
 echo "============================================================"
 echo ""
-echo "Initial admin password:"
+echo "Admin password (initial, change via UI then sync back to K8s secret):"
 kubectl -n "$NAMESPACE" get secret jenkins \
   -o jsonpath='{.data.jenkins-admin-password}' | base64 -d
 echo ""
