@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: flask-demo-1
+  namespace: argocd
+  finalizers:
+    # Ensure child resources are cleaned up if this Application is deleted.
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/jif718/flask-demo-1-chart.git
+    targetRevision: main      # change to master if your default branch is master
+    path: .                   # Chart.yaml is at repo root
+    helm:
+      releaseName: flask-demo-1
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true             # delete resources removed from Git
+      selfHeal: true          # revert manual kubectl drift
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true  # cleaner field management; avoids last-applied bloat
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        maxDuration: 3m
+        factor: 2

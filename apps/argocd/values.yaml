@@ -1,0 +1,64 @@
+# ArgoCD Helm values for EKS — minimal, port-forward access (Step 7).
+# Chart 9.5.15 -> app v3.4.2. Image version is managed by the chart;
+# we pin only CHART_VERSION in install-argocd.sh for reproducibility.
+# arm64 nodes (t4g.large): all argocd images are multi-arch, no concern.
+
+configs:
+  params:
+    # Run argocd-server in HTTP mode. Required for clean port-forward access
+    # (avoids TLS + gRPC-Web friction over kubectl port-forward).
+    # When ALB fronts this later, TLS terminates at the ALB; server stays insecure.
+    server.insecure: true
+
+# Run as a single replica each — this is a lab/learning cluster, not HA.
+controller:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+
+server:
+  replicas: 1
+  service:
+    type: ClusterIP   # port-forward for now; ALB Ingress in a later step
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+repoServer:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+applicationSet:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+redis:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+# Disable unused components to save ~200-300Mi on a 2-node cluster.
+dex:
+  enabled: false
+notifications:
+  enabled: false
