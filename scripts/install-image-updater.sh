@@ -4,15 +4,13 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-ROOT="${ROOT:-$(dirname "$SCRIPT_DIR")}"
+source "$SCRIPT_DIR/config.sh"   # ROOT, ARGOCD_NAMESPACE, IMAGE_UPDATER_*, CLUSTER_NAME, REGION
 
-NAMESPACE="${ARGOCD_NAMESPACE:-argocd}"
-RELEASE="${IMAGE_UPDATER_RELEASE:-argocd-image-updater}"
-SA_NAME="${IMAGE_UPDATER_SA:-argocd-image-updater}"
-POLICY_NAME="${IMAGE_UPDATER_POLICY_NAME:-ArgoCDImageUpdaterECRRead}"
-REPO_NAME="${ARGOCD_REPO_NAME:-argo}"
-CLUSTER_NAME="${CLUSTER_NAME:-jif-lab}"
-REGION="${REGION:-ap-east-1}"
+NAMESPACE="$ARGOCD_NAMESPACE"
+RELEASE="$IMAGE_UPDATER_RELEASE"
+SA_NAME="$IMAGE_UPDATER_SA"
+POLICY_NAME="$IMAGE_UPDATER_POLICY_NAME"
+REPO_NAME="$ARGOCD_REPO_NAME"
 VALUES="$ROOT/apps/argocd/image-updater-values.yaml"
 
 echo "===> [image-updater] pre-flight"

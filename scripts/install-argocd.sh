@@ -1,61 +1,41 @@
 #!/bin/bash
-# Install/upgrade ArgoCD on EKS with a pinned chart version.
-# Mirrors the hardening style of install-jenkins.sh.
-
+# install-argocd.sh - Install ArgoCD on EKS with a pinned chart version,
+# then create the git-creds secret used for GitOps write-back.
 set -euo pipefail
 
-NAMESPACE="argocd"
-RELEASE_NAME="argocd"
-CHART_VERSION="9.5.15"   # -> app v3.4.2
-REPO_NAME="argo"
-REPO_URL="https://argoproj.github.io/argo-helm"
-
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-ROOT=$(dirname "$SCRIPT_DIR")
-VALUES_FILE="${ROOT}/apps/argocd/values.yaml"
-APP_FILE="${ROOT}/apps/argocd/apps/flask-demo-1.yaml"
+source "$SCRIPT_DIR/config.sh"   # ROOT, ARGOCD_*, GITHUB_USERNAME
 
-echo "===> Pre-flight checks"
-# Sanity check: values.yaml must enable insecure mode for port-forward access.
-if ! grep -q "server.insecure: true" "${VALUES_FILE}"; then
-    echo "ERROR: ${VALUES_FILE} missing 'server.insecure: true'"
-    echo "       Without it, port-forward to argocd-server hits TLS/gRPC-Web issues."
-    exit 1
-fi
+NAMESPACE="$ARGOCD_NAMESPACE"
+RELEASE="$ARGOCD_RELEASE"
+CHART_VERSION="$ARGOCD_CHART_VERSION"   # -> app v3.4.3
+REPO_NAME="$ARGOCD_REPO_NAME"
+VALUES="$ROOT/apps/argocd/values.yaml"
 
-# Cluster reachable?
+echo "===> [argocd] pre-flight"
+[ -f "$VALUES" ] || { echo "ERROR: missing $VALUES"; exit 1; }
+# server.insecure is required for port-forward (avoids TLS/gRPC-Web issues).
+grep -q "server.insecure: true" "$VALUES" || { echo "ERROR: values.yaml missing server.insecure: true"; exit 1; }
 kubectl cluster-info >/dev/null 2>&1 || { echo "ERROR: cluster unreachable"; exit 1; }
-echo "  Cluster reachable"
-echo "  values.yaml: server.insecure confirmed"
 
-echo "===> Adding Helm repo"
-helm repo add "${REPO_NAME}" "${REPO_URL}" 2>/dev/null || true
-helm repo update "${REPO_NAME}"
+echo "===> [argocd] helm install (chart $CHART_VERSION)"
+helm repo add "$REPO_NAME" https://argoproj.github.io/argo-helm >/dev/null 2>&1 || true
+helm repo update "$REPO_NAME" >/dev/null
+helm upgrade --install "$RELEASE" "$REPO_NAME/argo-cd" \
+  --namespace "$NAMESPACE" --create-namespace \
+  --version "$CHART_VERSION" \
+  --values "$VALUES" \
+  --wait --timeout 10m
+kubectl -n "$NAMESPACE" rollout status deployment/argocd-server --timeout=5m
 
-echo "===> Resolving app version for chart ${CHART_VERSION}"
-APP_VERSION=$(helm search repo "${REPO_NAME}/argo-cd" --version "${CHART_VERSION}" \
-  --output json 2>/dev/null | grep -o '"app_version":"[^"]*"' | cut -d'"' -f4)
-APP_VERSION="${APP_VERSION:-unknown}"
+echo "===> [argocd] git-creds secret"
+# Used by ArgoCD (repo access) and Image Updater (git write-back commits).
+[ -n "${GITHUB_PAT:-}" ] || { echo "ERROR: GITHUB_PAT not set"; exit 1; }
+kubectl -n "$NAMESPACE" create secret generic git-creds \
+  --from-literal=username="$GITHUB_USERNAME" \
+  --from-literal=password="$GITHUB_PAT" \
+  --dry-run=client -o yaml | kubectl apply -f -
 
-echo "===> Installing/upgrading ArgoCD (chart ${CHART_VERSION} -> app ${APP_VERSION})"
-helm upgrade --install "${RELEASE_NAME}" "${REPO_NAME}/argo-cd" \
-  --namespace "${NAMESPACE}" \
-  --create-namespace \
-  --version "${CHART_VERSION}" \
-  --values "${VALUES_FILE}" \
-  --wait \
-  --timeout 10m
-
-echo "===> Waiting for argocd-server rollout"
-kubectl -n "${NAMESPACE}" rollout status deployment/argocd-server --timeout=5m
-
-echo ""
-echo "===> ArgoCD ready"
-echo "  Initial admin password:"
-kubectl -n "${NAMESPACE}" get secret argocd-initial-admin-secret \
-  -o jsonpath='{.data.password}' | base64 -d
-echo ""
-echo ""
-echo "  Access:"
-echo "    kubectl -n argocd port-forward svc/argocd-server 8081:80"
-echo "    open http://localhost:8081  (user: admin)"
+echo "===> [argocd] ready"
+echo "  password: kubectl -n $NAMESPACE get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d"
+echo "  access:   kubectl -n $NAMESPACE port-forward svc/argocd-server 8081:80"

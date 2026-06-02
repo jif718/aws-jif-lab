@@ -1,10 +1,9 @@
 #!/bin/bash
 # create-ecr-repos.sh - Create ECR repositories from repos.txt
-set -e
+set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-ROOT=$(dirname "$SCRIPT_DIR")
-REGION="ap-east-1"
+source "$SCRIPT_DIR/config.sh"   # ROOT, REGION, ... (standalone or via deploy-all)
 REPOS_FILE="$ROOT/infra/ecr/repos.txt"
 
 echo "Creating ECR repositories in region $REGION..."

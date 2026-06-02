@@ -13,8 +13,8 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-ROOT="${ROOT:-$(dirname "$SCRIPT_DIR")}"
-NAMESPACE="${ARGOCD_NAMESPACE:-argocd}"
+source "$SCRIPT_DIR/config.sh"   # ROOT, ARGOCD_NAMESPACE
+NAMESPACE="$ARGOCD_NAMESPACE"
 APPS_DIR="$ROOT/apps/argocd/apps"
 
 echo "===> [apps] discovering applications in $APPS_DIR"

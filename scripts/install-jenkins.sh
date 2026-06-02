@@ -23,12 +23,11 @@ set -euo pipefail
 
 # ------------------------- Configuration --------------------------------------
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-ROOT=$(dirname "$SCRIPT_DIR")
+source "$SCRIPT_DIR/config.sh"   # ROOT, JENKINS_*, CLUSTER_NAME, REGION, GITHUB_USERNAME
 
-NAMESPACE=jenkins
-RELEASE=jenkins
-CLUSTER=jif-lab
-REGION=ap-east-1
+NAMESPACE="$JENKINS_NAMESPACE"
+RELEASE="$JENKINS_RELEASE"
+CLUSTER="$CLUSTER_NAME"
 POLICY_NAME=JenkinsECRPushPolicy
 
 # ------------------------- Pre-flight checks ----------------------------------
@@ -49,7 +48,6 @@ if [ -z "${GITHUB_PAT:-}" ]; then
   echo "  export GITHUB_USERNAME='jif718'   # optional"
   exit 1
 fi
-GITHUB_USERNAME=${GITHUB_USERNAME:-jif718}
 
 # AWS connectivity
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)

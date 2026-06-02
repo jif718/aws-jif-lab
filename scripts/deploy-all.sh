@@ -10,36 +10,13 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-export ROOT
-ROOT=$(dirname "$SCRIPT_DIR")
 
 # ---------------------------------------------------------------------------
-# Shared configuration - exported so every sub-script inherits it.
-# Override any of these from the environment before running.
+# Shared configuration - sourced (exported) so every sub-script inherits it.
+# Override any value from the environment before running. Defaults live in
+# config.sh, the single source of truth shared with cleanup.sh.
 # ---------------------------------------------------------------------------
-# AWS / cluster
-export AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:-445529239852}"
-export REGION="${REGION:-ap-east-1}"
-export CLUSTER_NAME="${CLUSTER_NAME:-jif-lab}"
-
-# GitHub credentials (shared by Jenkins JCasC, ArgoCD repo, Image Updater)
-export GITHUB_USERNAME="${GITHUB_USERNAME:-jif718}"
-# GITHUB_PAT must come from the caller's environment - never hard-coded.
-
-# Jenkins
-export JENKINS_NAMESPACE="${JENKINS_NAMESPACE:-jenkins}"
-export JENKINS_RELEASE="${JENKINS_RELEASE:-jenkins}"
-
-# ArgoCD (versions per project spec)
-export ARGOCD_NAMESPACE="${ARGOCD_NAMESPACE:-argocd}"
-export ARGOCD_RELEASE="${ARGOCD_RELEASE:-argocd}"
-export ARGOCD_CHART_VERSION="${ARGOCD_CHART_VERSION:-9.5.16}"   # -> app v3.4.3
-export ARGOCD_REPO_NAME="${ARGOCD_REPO_NAME:-argo}"
-
-# ArgoCD Image Updater
-export IMAGE_UPDATER_RELEASE="${IMAGE_UPDATER_RELEASE:-argocd-image-updater}"
-export IMAGE_UPDATER_SA="${IMAGE_UPDATER_SA:-argocd-image-updater}"
-export IMAGE_UPDATER_POLICY_NAME="${IMAGE_UPDATER_POLICY_NAME:-ArgoCDImageUpdaterECRRead}"
+source "$SCRIPT_DIR/config.sh"
 
 # ---------------------------------------------------------------------------
 # Global pre-flight checks (sourced so a failed check exits this script
@@ -48,14 +25,35 @@ export IMAGE_UPDATER_POLICY_NAME="${IMAGE_UPDATER_POLICY_NAME:-ArgoCDImageUpdate
 source "$SCRIPT_DIR/preflight-checks.sh"
 
 # ---------------------------------------------------------------------------
-# Run steps in order. Any failure aborts (set -e).
+# Run steps in order. Any failure aborts (set -e) and the ERR trap reports
+# which step died so the user doesn't have to scroll back to find it.
 # ---------------------------------------------------------------------------
-"$SCRIPT_DIR/deploy-k8s-cluster.sh"
-"$SCRIPT_DIR/create-ecr-repos.sh"
-"$SCRIPT_DIR/install-jenkins.sh"
-"$SCRIPT_DIR/install-argocd.sh"
-"$SCRIPT_DIR/install-image-updater.sh"
-"$SCRIPT_DIR/deploy-apps.sh"
+STEPS=(
+  deploy-k8s-cluster.sh
+  create-ecr-repos.sh
+  install-jenkins.sh
+  install-argocd.sh
+  install-image-updater.sh
+  deploy-apps.sh
+)
+
+# Fail fast if any step is missing before we start mutating cloud state.
+for step in "${STEPS[@]}"; do
+  [ -f "$SCRIPT_DIR/$step" ] || { echo "ERROR: missing step script: $step"; exit 1; }
+done
+
+CURRENT_STEP="preflight"
+trap 'echo "===> deploy-all: FAILED at step: $CURRENT_STEP" >&2' ERR
+
+for step in "${STEPS[@]}"; do
+  CURRENT_STEP=$step
+  echo ""
+  echo "===> deploy-all: running $step"
+  # Invoke via `bash` so execution does not depend on the file's +x bit.
+  bash "$SCRIPT_DIR/$step"
+done
+
+trap - ERR
 
 echo ""
 echo "===> deploy-all: complete"

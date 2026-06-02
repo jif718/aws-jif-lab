@@ -3,8 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-ROOT="${ROOT:-$(dirname "$SCRIPT_DIR")}"
-CLUSTER_NAME="${CLUSTER_NAME:-jif-lab}"
+source "$SCRIPT_DIR/config.sh"   # ROOT, CLUSTER_NAME, ... (standalone or via deploy-all)
 
 echo "===> [cluster] EKS cluster"
 # Skip creation if the cluster context is already reachable (idempotent rerun).
@@ -17,7 +16,7 @@ else
 fi
 
 echo "===> [cluster] gp3 default StorageClass"
-kubectl apply -f "$ROOT/apps/storage/gp3-storageclass.yaml"
+kubectl apply -f "$ROOT/infra/storage/gp3-storageclass.yaml"
 # Demote gp2 so only gp3 is default.
 kubectl patch storageclass gp2 \
   -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}' \

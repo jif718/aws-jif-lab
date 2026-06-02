@@ -22,9 +22,11 @@ spec:
         - alias: "flask"
           imageName: "445529239852.dkr.ecr.ap-east-1.amazonaws.com/myapp/flask-demo-1"
           commonUpdateSettings:
-            # build-N is not semver -> newest-build; lock tag format via regexp
+            # tag = <UTC timestamp>-<git sha>, e.g. 20260602044516-a3f5c9d
+            # 14-digit timestamp is fixed-width and monotonic, so newest-build's
+            # lexical sort picks the latest; survives Jenkins build-number resets
             updateStrategy: "newest-build"
-            allowTags: "regexp:^build-[0-9]+$"
+            allowTags: "regexp:^[0-9]{14}-[0-9a-f]{7}$"
           # Tell it which Helm value keys hold the repo + tag in values.yaml
           manifestTargets:
             helm:
