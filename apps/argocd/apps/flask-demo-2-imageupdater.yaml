@@ -1,0 +1,34 @@
+apiVersion: argocd-image-updater.argoproj.io/v1alpha1
+kind: ImageUpdater
+metadata:
+  name: flask-demo-2-updater
+  # Must be the namespace where the ArgoCD Application lives (argocd),
+  # NOT the app's runtime namespace. The CR only matches Applications here.
+  namespace: argocd
+spec:
+  writeBackConfig:
+    # git = declarative; we manage the Application in git (app-of-apps),
+    # so git write-back keeps git as source of truth.
+    method: "git:secret:argocd/git-creds"
+    gitConfig:
+      repository: "https://github.com/jif718/flask-demo-2-chart.git"
+      branch: "main"
+      # values.yaml sits at repo root (Chart.yaml is at root, source.path=.)
+      writeBackTarget: "helmvalues:/values.yaml"
+  applicationRefs:
+    # Exact match for the flask-demo-1 Application
+    - namePattern: "flask-demo-2"
+      images:
+        - alias: "flask"
+          imageName: "445529239852.dkr.ecr.ap-east-1.amazonaws.com/myapp/flask-demo-2"
+          commonUpdateSettings:
+            # tag = <UTC timestamp>-<git sha>, e.g. 20260602044516-a3f5c9d
+            # 14-digit timestamp is fixed-width and monotonic, so newest-build's
+            # lexical sort picks the latest; survives Jenkins build-number resets
+            updateStrategy: "newest-build"
+            allowTags: "regexp:^[0-9]{14}-[0-9a-f]{7}$"
+          # Tell it which Helm value keys hold the repo + tag in values.yaml
+          manifestTargets:
+            helm:
+              name: "image.repository"
+              tag: "image.tag"
