@@ -57,5 +57,5 @@ kubectl -n "${NAMESPACE}" get secret argocd-initial-admin-secret \
 echo ""
 echo ""
 echo "  Access:"
-echo "    kubectl -n argocd port-forward svc/argocd-server 8080:80"
-echo "    open http://localhost:8080  (user: admin)"
+echo "    kubectl -n argocd port-forward svc/argocd-server 8081:80"
+echo "    open http://localhost:8081  (user: admin)"

@@ -89,10 +89,8 @@ echo "  values.yaml: webSocket protocol confirmed"
 # readOnlyRootFilesystem: true is inherited by init container and breaks
 # apply_config.sh (which writes to /usr/share/jenkins/ref/plugins during
 # plugin install). values.yaml must override to false.
-if ! awk '/^controller:/,/^[a-zA-Z]/' jenkins/values.yaml | \
-     grep -A10 "containerSecurityContext:" | \
-     grep -q "readOnlyRootFilesystem: *false"; then
-    echo "ERROR: jenkins/values.yaml missing controller.containerSecurityContext.readOnlyRootFilesystem: false"
+if ! grep -q "readOnlyRootFilesystem: *false" "$ROOT/apps/jenkins/values.yaml"; then
+    echo "ERROR: $JENKINS_VALUES missing readOnlyRootFilesystem: false"
     echo "       Without this, init container fails on plugin install (read-only rootfs)."
     exit 1
 fi
