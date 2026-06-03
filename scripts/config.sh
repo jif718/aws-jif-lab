@@ -34,3 +34,33 @@ export ARGOCD_REPO_NAME="${ARGOCD_REPO_NAME:-argo}"
 export IMAGE_UPDATER_RELEASE="${IMAGE_UPDATER_RELEASE:-argocd-image-updater}"
 export IMAGE_UPDATER_SA="${IMAGE_UPDATER_SA:-argocd-image-updater}"
 export IMAGE_UPDATER_POLICY_NAME="${IMAGE_UPDATER_POLICY_NAME:-ArgoCDImageUpdaterECRRead}"
+
+# ---- Step 8: Gateway (ALB Controller + external-dns + ACM Ingress) ----
+
+# Gateway controllers live in kube-system (cluster infra layer, not GitOps)
+export GATEWAY_NAMESPACE="${GATEWAY_NAMESPACE:-kube-system}"
+
+# AWS Load Balancer Controller
+export ALB_CONTROLLER_SA="${ALB_CONTROLLER_SA:-aws-load-balancer-controller}"
+export ALB_CONTROLLER_RELEASE="${ALB_CONTROLLER_RELEASE:-aws-load-balancer-controller}"
+export ALB_CONTROLLER_POLICY_NAME="${ALB_CONTROLLER_POLICY_NAME:-AWSLoadBalancerControllerIAMPolicy}"
+export ALB_CONTROLLER_ROLE_NAME="${ALB_CONTROLLER_ROLE_NAME:-AmazonEKSLoadBalancerControllerRole}"
+
+# external-dns
+export EXTERNAL_DNS_SA="${EXTERNAL_DNS_SA:-external-dns}"
+export EXTERNAL_DNS_RELEASE="${EXTERNAL_DNS_RELEASE:-external-dns}"
+export EXTERNAL_DNS_POLICY_NAME="${EXTERNAL_DNS_POLICY_NAME:-ExternalDNSPolicy}"
+
+# DNS / TLS
+# Base domain == the delegated Route53 sub-zone (matches external-dns domainFilters)
+export BASE_DOMAIN="${BASE_DOMAIN:-aws.ololol.lol}"
+# Wildcard cert covers jenkins./argocd./flask-demo-1. all at once
+export ACM_DOMAIN="${ACM_DOMAIN:-*.aws.ololol.lol}"
+# Hosted zone id for the sub-zone (used for ACM DNS-validation record upsert).
+# Looked up dynamically if left empty; hard-set here only as an override.
+export HOSTED_ZONE_ID="${HOSTED_ZONE_ID:-}"
+
+# helm repo for eks-charts (ALB controller). external-dns uses the same 'argo'?
+# No — external-dns has its own chart repo.
+export EKS_CHARTS_REPO_NAME="${EKS_CHARTS_REPO_NAME:-eks}"
+export EXTERNAL_DNS_REPO_NAME="${EXTERNAL_DNS_REPO_NAME:-external-dns}"

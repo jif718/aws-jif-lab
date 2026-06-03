@@ -34,7 +34,9 @@ STEPS=(
   install-jenkins.sh
   install-argocd.sh
   install-image-updater.sh
-  deploy-apps.sh
+  manage-acm-cert.sh        # Step 8a: ensure wildcard ACM cert (idempotent, reused across rebuilds)
+  install-gateway.sh        # Step 8b: ALB Controller + external-dns (+ 2 IRSA), before apps
+  deploy-apps.sh            # apps' Ingress provisions the shared ALB immediately
 )
 
 # Fail fast if any step is missing before we start mutating cloud state.
