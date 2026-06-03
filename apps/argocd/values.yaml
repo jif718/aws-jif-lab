@@ -30,6 +30,17 @@ server:
       memory: 256Mi
     limits:
       memory: 512Mi
+  ingress:
+    enabled: true
+    ingressClassName: alb
+    hostname: argocd.aws.ololol.lol
+    annotations:
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/group.name: jif-lab
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+      alb.ingress.kubernetes.io/ssl-redirect: '443'
+      alb.ingress.kubernetes.io/healthcheck-path: /healthz
 
 repoServer:
   replicas: 1

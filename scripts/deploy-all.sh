@@ -59,5 +59,3 @@ trap - ERR
 
 echo ""
 echo "===> deploy-all: complete"
-echo "  Jenkins: kubectl -n $JENKINS_NAMESPACE port-forward svc/$JENKINS_RELEASE 8080:8080"
-echo "  ArgoCD:  kubectl -n $ARGOCD_NAMESPACE port-forward svc/argocd-server 8081:80"

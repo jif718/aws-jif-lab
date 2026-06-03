@@ -66,4 +66,6 @@ for app_file in "$APPS_DIR"/*.yaml; do
   deployed=$((deployed + 1))
 done
 
+bash "$SCRIPT_DIR/lock-alb.sh"
+
 echo "===> [apps] done, $deployed application(s) deployed"

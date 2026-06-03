@@ -46,8 +46,20 @@ controller:
 
   javaOpts: "-XX:MaxRAMPercentage=70.0 -Dhudson.slaves.NodeProvisioner.initialDelay=0 -Dhudson.slaves.NodeProvisioner.MARGIN=50 -Dhudson.slaves.NodeProvisioner.MARGIN0=0.85"
 
-  jenkinsUrlProtocol: http
-  jenkinsUrl: "http://jenkins.jenkins.svc.cluster.local:8080"
+  jenkinsUrl: "https://jenkins.aws.ololol.lol/"
+  
+  ingress:                                           # 加:整段
+    enabled: true
+    apiVersion: "networking.k8s.io/v1"
+    ingressClassName: alb
+    hostName: jenkins.aws.ololol.lol
+    annotations:
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/group.name: jif-lab
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+      alb.ingress.kubernetes.io/ssl-redirect: '443'
+      alb.ingress.kubernetes.io/healthcheck-path: /login
 
   usePodSecurityContext: true
   runAsUser: 1000
@@ -285,7 +297,7 @@ controller:
 
         unclassified:
           location:
-            url: "http://jenkins.jenkins.svc.cluster.local:8080/"
+            url: "https://jenkins.aws.ololol.lol/"
 
     security:
       apiToken:

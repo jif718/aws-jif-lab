@@ -35,7 +35,8 @@ kubectl -n "$NAMESPACE" create secret generic git-creds \
   --from-literal=username="$GITHUB_USERNAME" \
   --from-literal=password="$GITHUB_PAT" \
   --dry-run=client -o yaml | kubectl apply -f -
+  
+bash "$SCRIPT_DIR/lock-alb.sh"
 
 echo "===> [argocd] ready"
 echo "  password: kubectl -n $NAMESPACE get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d"
-echo "  access:   kubectl -n $NAMESPACE port-forward svc/argocd-server 8081:80"
