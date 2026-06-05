@@ -1,4 +1,8 @@
-devops/python-agent
 library/kaniko-executor
+library/nginx
+devops/eclipse-temurin
+kaniko-cache/layers
 myapp/flask-demo-1
-myapp/flask-demo-1/cache
+myapp/flask-demo-2
+myapp/html5demos
+myapp/spring-petclinic

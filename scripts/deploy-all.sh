@@ -58,4 +58,13 @@ done
 trap - ERR
 
 echo ""
-echo "===> deploy-all: complete"
+echo "################################################"
+echo "#                                              #"
+echo "#          DEPLOY-ALL COMPLETE                 #"
+echo "#                                              #"
+echo "################################################"
+echo ""
+echo "Jenkins admin password:"
+kubectl -n "$JENKINS_NAMESPACE" get secret "$JENKINS_RELEASE" -o jsonpath='{.data.jenkins-admin-password}' | base64 -d; echo
+echo "ArgoCD  admin password:"
+kubectl -n "$ARGOCD_NAMESPACE" get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d; echo

@@ -100,4 +100,10 @@ helm upgrade --install "$EXTERNAL_DNS_RELEASE" \
 echo "===> [gateway] verify"
 kubectl -n "$NS" get deploy "$ALB_CONTROLLER_RELEASE" "$EXTERNAL_DNS_RELEASE"
 kubectl -n "$NS" rollout status deploy/"$ALB_CONTROLLER_RELEASE" --timeout=2m
-echo "===> [gateway] ready"
+echo ""
+echo "################################################"
+echo "#                                              #"
+echo "#          Install Gateway Complete            #"
+echo "#                                              #"
+echo "################################################"
+echo ""

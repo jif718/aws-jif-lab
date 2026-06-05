@@ -68,4 +68,11 @@ done
 
 bash "$SCRIPT_DIR/lock-alb.sh"
 
-echo "===> [apps] done, $deployed application(s) deployed"
+echo ""
+echo "################################################"
+echo "#                                              #"
+echo "#          Deploy APPS Complete                #"
+echo "#                                              #"
+echo "################################################"
+echo "  $deployed application(s) deployed"
+echo ""

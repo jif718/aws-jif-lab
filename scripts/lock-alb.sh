@@ -3,16 +3,23 @@
 #
 # WHY a standalone script (not Ingress annotations):
 #   flask-demo-1 is GitOps-managed (no shell hook to inject a dynamic IP), and
-#   we want the ALB locked after ANY single-app deploy regardless of which one
-#   created/updated the ALB. This script resolves the current IP and rewrites
-#   the ALB SG inbound rules to exactly that IP on 80/443.
+#   we want the ALB locked after ANY deploy regardless of which one created it.
+#   This script resolves the current egress IP and rewrites the ALB SG inbound
+#   rules to exactly that IP on 80/443.
 #
-# KNOWN RACE (documented in RUNBOOK): the ALB Controller also manages this SG.
-# On reconcile it resets the SG (often to 0.0.0.0/0). This script must run
-# AFTER the controller settles. It waits for the ALB to be active, applies the
-# lock, then re-verifies; re-run it after anything that triggers a reconcile.
+# CALLED FROM: install-jenkins.sh / install-argocd.sh / deploy-apps.sh (end),
+#   and deploy-all.sh (final). On a FULL rebuild the ALB does not exist until an
+#   Ingress is synced (deploy-apps), so early callers find no ALB yet — that is
+#   NORMAL: this script SKIPS (exit 0) instead of failing, so it never aborts
+#   deploy-all. The lock is applied by the later caller once the ALB exists.
 #
-# Idempotent: wipes all existing inbound rules each run, then sets one IP.
+# KNOWN RACE (see RUNBOOK): the ALB Controller also manages this SG. On reconcile
+#   it may reset the SG (often to 0.0.0.0/0). Re-run this script after anything
+#   that triggers an Ingress reconcile (Ingress change / ArgoCD selfHeal / redeploy).
+#
+# Idempotent: wipes all existing inbound rules each run, then sets exactly one
+# IP on 80/443. Picks up egress-IP changes automatically (home broadband IP drifts).
+#
 # Usage: ./scripts/lock-alb.sh
 set -euo pipefail
 
@@ -28,8 +35,9 @@ echo "===> [lock-alb] current egress IP: $CIDR"
 # 2. Find the cluster's shared ALB by the controller's cluster tag,
 #    so we never touch an unrelated load balancer.
 find_alb() {
+  local arn owner
   for arn in $(aws elbv2 describe-load-balancers --region "$REGION" \
-      --query 'LoadBalancers[].LoadBalancerArn' --output text); do
+      --query 'LoadBalancers[].LoadBalancerArn' --output text 2>/dev/null || true); do
     owner=$(aws elbv2 describe-tags --region "$REGION" --resource-arns "$arn" \
       --query "TagDescriptions[0].Tags[?Key=='elbv2.k8s.aws/cluster'].Value | [0]" \
       --output text 2>/dev/null || true)
@@ -38,20 +46,24 @@ find_alb() {
   return 1
 }
 
-# Wait for the ALB to exist + be active (controller may still be creating it).
-ALB_ARN=""
-for i in $(seq 1 18); do   # up to ~3 min
-  ALB_ARN=$(find_alb || true)
-  if [ -n "$ALB_ARN" ]; then
-    state=$(aws elbv2 describe-load-balancers --region "$REGION" \
-      --load-balancer-arns "$ALB_ARN" \
-      --query 'LoadBalancers[0].State.Code' --output text 2>/dev/null || true)
-    [ "$state" = "active" ] && break
-  fi
-  echo "  [$i/18] waiting for ALB to be active (state=${state:-none})"
+# Probe ONCE. If no ALB exists yet (early step of a full rebuild), SKIP — do not
+# fail, or it would abort deploy-all. The later caller (deploy-apps) will lock it.
+ALB_ARN=$(find_alb || true)
+if [ -z "$ALB_ARN" ]; then
+  echo "  [lock-alb] no ALB yet for cluster $CLUSTER_NAME — skipping."
+  echo "             (the ALB is created when an Ingress is synced; lock applies then)"
+  exit 0
+fi
+
+# Found an ALB — wait for it to become active (it may still be provisioning).
+for i in $(seq 1 12); do   # up to ~2 min
+  state=$(aws elbv2 describe-load-balancers --region "$REGION" \
+    --load-balancer-arns "$ALB_ARN" \
+    --query 'LoadBalancers[0].State.Code' --output text 2>/dev/null || true)
+  [ "$state" = "active" ] && break
+  echo "  [$i/12] waiting for ALB to be active (state=${state:-provisioning})"
   sleep 10
 done
-[ -n "$ALB_ARN" ] || { echo "ERROR: no ALB for cluster $CLUSTER_NAME (deploy an Ingress first)"; exit 1; }
 echo "  ALB: $ALB_ARN"
 
 # 3. Resolve the ALB's security group.
@@ -61,7 +73,7 @@ echo "  SG:  $SG_ID"
 
 # 4. apply_lock(): wipe all inbound rules, then allow only $CIDR on 80/443.
 apply_lock() {
-  local existing
+  local existing rule_id
   existing=$(aws ec2 describe-security-group-rules --region "$REGION" \
     --filters "Name=group-id,Values=$SG_ID" \
     --query 'SecurityGroupRules[?!IsEgress].SecurityGroupRuleId' --output text)
@@ -77,13 +89,12 @@ apply_lock() {
     >/dev/null 2>&1 || true   # tolerate "already exists" if a prior run set it
 }
 
-# verify_locked(): true only if inbound is EXACTLY $CIDR and nothing open.
+# verify_locked(): true only if inbound is exactly $CIDR and nothing open.
 verify_locked() {
   local cidrs
   cidrs=$(aws ec2 describe-security-group-rules --region "$REGION" \
     --filters "Name=group-id,Values=$SG_ID" \
     --query 'SecurityGroupRules[?!IsEgress].CidrIpv4' --output text)
-  # no 0.0.0.0/0 present AND our CIDR present
   echo "$cidrs" | grep -q "0.0.0.0/0" && return 1
   echo "$cidrs" | grep -q "$MY_IP" && return 0
   return 1

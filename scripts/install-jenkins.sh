@@ -209,21 +209,11 @@ helm upgrade --install "$RELEASE" jenkinsci/jenkins \
   --wait \
   --timeout 10m
 
-# Lock the shared ALB to current IP after deploy (see lock-alb.sh for the race note).
-bash "$SCRIPT_DIR/lock-alb.sh"
-
 # ------------------------- Post-install info ----------------------------------
 echo ""
-echo "============================================================"
-echo "  Jenkins installed successfully"
-echo "============================================================"
+echo "################################################"
+echo "#                                              #"
+echo "#          Install Jenkins Complete            #"
+echo "#                                              #"
+echo "################################################"
 echo ""
-echo "Initial admin password:"
-kubectl -n "$NAMESPACE" get secret jenkins \
-  -o jsonpath='{.data.jenkins-admin-password}' | base64 -d
-echo ""
-echo ""
-echo "After changing the password in UI, sync to K8s secret:"
-echo "  NEW_PWD='your-new-password'"
-echo "  kubectl -n $NAMESPACE patch secret jenkins \\"
-echo "    -p \"{\\\"data\\\":{\\\"jenkins-admin-password\\\":\\\"\$(echo -n \$NEW_PWD | base64)\\\"}}\""
